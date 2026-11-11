@@ -33,6 +33,7 @@ DEFAULTS = {
     "bar_12h": True, "bar_show_date": True, "bar_show_seconds": False,
     "bar_launcher_icon": "", "bar_launcher_text": True,
     "bar_show_taskbar": True, "bar_show_tray": True, "bar_show_battery": True,
+    "bar_show_theme": False,
 }
 
 
@@ -179,7 +180,9 @@ def apply_waybar(s):
     right = []
     if s.get("bar_show_tray", True):
         right.append("tray")
-    right += ["custom/theme", "network", "pulseaudio"]
+    if s.get("bar_show_theme", False):
+        right.append("custom/theme")
+    right += ["network", "pulseaudio"]
     if s.get("bar_show_battery", True):
         right.append("battery")
     right += ["custom/notifications", "custom/power"]
@@ -846,6 +849,9 @@ class Settings(Adw.Application):
                         subtitle="Show text alongside the launcher icon")
 
         # Modules
+        r_theme = switch("Appearance button", self.s.get("bar_show_theme", False),
+                         lambda on: update_bar_setting("bar_show_theme", on),
+                         subtitle="Show theme customize icon on top bar")
         r_taskbar = switch("Window taskbar", self.s.get("bar_show_taskbar", True),
                            lambda on: update_bar_setting("bar_show_taskbar", on),
                            subtitle="Show open windows in the top bar")
@@ -866,7 +872,7 @@ class Settings(Adw.Application):
         return self.page(
             self.group("Clock", rows=[r_12h, r_date, r_sec]),
             self.group("Launcher", rows=[r_icon, r_text]),
-            self.group("Modules", rows=[r_taskbar, r_tray, r_batt]),
+            self.group("Modules", rows=[r_taskbar, r_tray, r_batt, r_theme]),
             self.group(rows=[reload_row])
         )
 

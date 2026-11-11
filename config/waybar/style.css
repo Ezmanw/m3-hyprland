@@ -82,7 +82,8 @@ window#waybar {
     font-weight: 400;
 }
 #tray { border-radius: 999px; margin-right: 8px; padding: 0 14px; }
-#custom-theme { border-radius: 999px 0 0 999px; padding-left: 14px; }
+#custom-theme, #network { border-radius: 999px 0 0 999px; padding-left: 14px; }
+#custom-theme + #network { border-radius: 0; padding-left: 9px; }
 #custom-notifications { border-radius: 0 999px 999px 0; padding-right: 14px; }
 #custom-theme:hover, #network:hover, #pulseaudio:hover, #custom-notifications:hover { color: @primary; }
 #battery.warning { color: @tertiary; }

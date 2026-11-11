@@ -6,7 +6,7 @@
     "spacing": 0,
     "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "custom/theme", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
+    "modules-right": ["tray", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
 
     "custom/launcher": {
         "format": "<span font_family='Material Symbols Rounded' size='13pt' rise='-2pt'></span>  Search",
