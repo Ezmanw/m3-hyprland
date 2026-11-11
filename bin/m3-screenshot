@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# m3-screenshot region|full - saves to ~/Pictures/Screenshots and copies to the clipboard
+dir="$HOME/Pictures/Screenshots"; mkdir -p "$dir"
+file="$dir/Screenshot $(date '+%Y-%m-%d %H-%M-%S').png"
+case "${1:-full}" in
+    region) area=$(slurp) || exit 0; grim -g "$area" "$file" ;;
+    *)      grim "$file" ;;
+esac || exit 1
+wl-copy --type image/png < "$file"
+notify-send -i "$file" "Screenshot saved" "Copied to clipboard"

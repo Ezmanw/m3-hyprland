@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# m3-theme - control the Material 3 theme of the whole desktop.
+#
+#   m3-theme menu                 quick menu (the Settings app, Super+I, has the same options)
+#   m3-theme color '#6750A4'      build the palette from a seed colour
+#   m3-theme wallpaper FILE       use an image as wallpaper and take the colours from it
+#   m3-theme wallpaper shapes     go back to the generated M3 shapes wallpaper
+#   m3-theme dark | light | toggle
+#   m3-theme style NAME           tonal-spot, expressive, vibrant, fidelity, content,
+#                                 neutral, monochrome, fruit-salad, rainbow
+#   m3-theme icons NAME           icon pack (no name = Papirus)
+#   m3-theme apply                regenerate everything from the saved settings
+#   m3-theme status               show the saved settings
+set -u
+
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/m3"
+CONF="$CFG/m3-theme.conf"
+export PATH="$HOME/.local/bin:$PATH"
+
+# Saved settings (defaults = M3 baseline purple, dark)
+SOURCE=color          # color | wallpaper
+COLOR='#6750A4'
+WALLPAPER=shapes      # shapes | /path/to/image
+MODE=dark             # dark | light
+STYLE=tonal-spot
+ICONS=''              # icon pack; empty = Papirus matching light/dark
+[ -f "$CONF" ] && . "$CONF"
+
+save() {
+    mkdir -p "$(dirname "$CONF")"
+    printf 'SOURCE=%q\nCOLOR=%q\nWALLPAPER=%q\nMODE=%q\nSTYLE=%q\nICONS=%q\n' \
+        "$SOURCE" "$COLOR" "$WALLPAPER" "$MODE" "$STYLE" "$ICONS" > "$CONF"
+}
+
+in_session() { [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && [ -n "${WAYLAND_DISPLAY:-}" ]; }
+
+icon_theme() {
+    if [ -n "$ICONS" ]; then echo "$ICONS"
+    elif [ "$MODE" = light ]; then echo Papirus-Light
+    else echo Papirus-Dark; fi
+}
+
+wallpaper_file() {
+    if [ "$WALLPAPER" = shapes ] || [ ! -f "$WALLPAPER" ]; then
+        echo "$STATE_DIR/wallpaper.png"
+    else
+        echo "$WALLPAPER"
+    fi
+}
+
+set_wallpaper() {
+    in_session || return 0
+    pkill -x swaybg 2>/dev/null
+    setsid -f swaybg -m fill -i "$(wallpaper_file)" >/dev/null 2>&1
+}
+
+set_gtk() {
+    command -v gsettings >/dev/null || return 0
+    local s=org.gnome.desktop.interface
+    if [ "$MODE" = dark ]; then
+        gsettings set $s color-scheme prefer-dark
+        gsettings set $s gtk-theme adw-gtk3-dark
+    else
+        gsettings set $s color-scheme prefer-light
+        gsettings set $s gtk-theme adw-gtk3
+    fi
+    gsettings set $s icon-theme "$(icon_theme)"
+    gsettings set $s cursor-theme Bibata-Modern-Classic
+    gsettings set $s font-name 'Google Sans Flex 11'
+} 2>/dev/null
+
+set_qt() { # Qt apps: Fusion style + the generated palette, through qt5ct / qt6ct
+    local v icons; icons="$(icon_theme)"
+    for v in qt5ct qt6ct; do
+        mkdir -p "$CFG/$v"
+        printf '%s\n' '# Written by m3-theme on every theme change.' '[Appearance]' \
+            "color_scheme_path=$CFG/$v/colors/m3.conf" 'custom_palette=true' \
+            "icon_theme=$icons" 'standard_dialogs=default' 'style=Fusion' > "$CFG/$v/$v.conf"
+    done
+}
+
+apply() {
+    mkdir -p "$STATE_DIR" "$CFG"/{hypr,waybar,swaync,swayosd,fuzzel,foot,gtk-3.0,gtk-4.0,qt5ct/colors,qt6ct/colors}
+    local args=(-m "$MODE" -t "scheme-$STYLE" -c "$CFG/matugen/config.toml" -q)
+    if [ "$SOURCE" = wallpaper ] && [ -f "$WALLPAPER" ]; then
+        matugen image "$WALLPAPER" "${args[@]}" || { echo "m3-theme: matugen failed" >&2; return 1; }
+    else
+        matugen color hex "$COLOR" "${args[@]}" || { echo "m3-theme: matugen failed" >&2; return 1; }
+    fi
+    # Render the generated shapes wallpaper in the new colours
+    if command -v rsvg-convert >/dev/null && [ -f "$STATE_DIR/wallpaper.svg" ]; then
+        rsvg-convert -w 3840 -h 2160 "$STATE_DIR/wallpaper.svg" -o "$STATE_DIR/wallpaper.png"
+    fi
+    # launcher and taskbar use the chosen icon pack too
+    sed -i "s|^icon-theme=.*|icon-theme=$(icon_theme)|" "$CFG/fuzzel/fuzzel.ini" 2>/dev/null
+    sed -i "s|\"icon-theme\": \"[^\"]*\"|\"icon-theme\": \"$(icon_theme)\"|" "$CFG/waybar/config.jsonc" 2>/dev/null
+    set_gtk
+    set_qt
+    # login screen (only there if install.sh --login-screen was used)
+    local sddm=/usr/share/sddm/themes/m3/theme.conf.user
+    [ -w "$sddm" ] && [ -f "$STATE_DIR/sddm-theme.conf" ] && cat "$STATE_DIR/sddm-theme.conf" > "$sddm"
+    if in_session; then
+        set_wallpaper
+        hyprctl reload >/dev/null 2>&1
+        pkill -SIGUSR2 -x waybar 2>/dev/null
+        swaync-client -rs >/dev/null 2>&1
+        if pgrep -x swayosd-server >/dev/null; then
+            pkill -x swayosd-server; setsid -f swayosd-server >/dev/null 2>&1
+        fi
+    fi
+}
+
+pick() { fuzzel --dmenu --placeholder "$1" --lines "${2:-9}"; }
+
+menu() {
+    local other=light; [ "$MODE" = light ] && other=dark
+    local choice
+    choice=$(printf '%s\n' \
+        "Switch to $other mode" \
+        "Colour…" \
+        "Custom colour…" \
+        "Wallpaper from image…" \
+        "Wallpaper: M3 shapes" \
+        "Style…" | pick "Theme" 6) || exit 0
+    case "$choice" in
+        "Switch to"*) MODE=$other ;;
+        "Colour…")
+            choice=$(printf '%s\n' \
+                "Purple   #6750A4" "Indigo   #4355B9" "Blue     #0061A4" "Teal     #006A6A" \
+                "Green    #386A20" "Yellow   #695F00" "Orange   #8B5000" "Red      #B3261E" \
+                "Pink     #984061" | pick "Seed colour") || exit 0
+            COLOR="${choice##* }"; SOURCE=color ;;
+        "Custom colour…")
+            choice=$(zenity --color-selection --title "Seed colour" 2>/dev/null) || exit 0
+            # zenity prints rgb(r,g,b)
+            if [[ "$choice" =~ ([0-9]+),\ *([0-9]+),\ *([0-9]+) ]]; then
+                COLOR=$(printf '#%02X%02X%02X' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
+            else
+                COLOR="$choice"
+            fi
+            SOURCE=color ;;
+        "Wallpaper from image…")
+            choice=$(zenity --file-selection --title "Wallpaper" \
+                --file-filter='Images | *.png *.jpg *.jpeg *.webp' 2>/dev/null) || exit 0
+            WALLPAPER="$choice"; SOURCE=wallpaper ;;
+        "Wallpaper: M3 shapes") WALLPAPER=shapes; SOURCE=color ;;
+        "Style…")
+            choice=$(printf '%s\n' tonal-spot expressive vibrant fidelity content neutral monochrome fruit-salad rainbow \
+                | pick "Palette style") || exit 0
+            STYLE="$choice" ;;
+        *) exit 0 ;;
+    esac
+    save; apply
+}
+
+case "${1:-status}" in
+    menu)    menu ;;
+    apply)   apply ;;
+    restore) set_gtk; set_wallpaper ;;
+    dark|light) MODE=$1; save; apply ;;
+    toggle)  [ "$MODE" = dark ] && MODE=light || MODE=dark; save; apply ;;
+    color|colour)
+        [[ "${2:-}" =~ ^#?[0-9A-Fa-f]{6}$ ]] || { echo "usage: m3-theme color '#RRGGBB'" >&2; exit 2; }
+        COLOR="#${2#\#}"; SOURCE=color; save; apply ;;
+    wallpaper)
+        if [ "${2:-}" = shapes ]; then WALLPAPER=shapes; SOURCE=color
+        elif [ -f "${2:-}" ]; then WALLPAPER=$(realpath "$2"); SOURCE=wallpaper
+        else echo "usage: m3-theme wallpaper FILE|shapes" >&2; exit 2; fi
+        save; apply ;;
+    icons)   ICONS="${2:-}"; save; apply
+             if in_session; then pkill -x waybar; setsid -f waybar >/dev/null 2>&1; fi ;;
+    style)   [ -n "${2:-}" ] || { echo "usage: m3-theme style NAME" >&2; exit 2; }
+             STYLE=$2; save; apply ;;
+    get)     case "${2:-}" in
+                 mode) echo "$MODE" ;; color|colour) echo "$COLOR" ;; style) echo "$STYLE" ;;
+                 wallpaper) echo "$WALLPAPER" ;; source) echo "$SOURCE" ;; *) exit 2 ;;
+             esac ;;
+    status)  echo "source=$SOURCE colour=$COLOR wallpaper=$WALLPAPER mode=$MODE style=$STYLE" ;;
+    *)       sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

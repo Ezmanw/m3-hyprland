@@ -1,0 +1,95 @@
+// Material 3 top bar. Icons are Material Symbols Rounded codepoints.
+{
+    "layer": "top",
+    "position": "top",
+    "height": 48,
+    "spacing": 0,
+    "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar"],
+    "modules-center": ["clock"],
+    "modules-right": ["tray", "custom/theme", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
+
+    "custom/launcher": {
+        "format": "<span font_family='Material Symbols Rounded' size='13pt' rise='-2pt'></span>  Search",
+        "tooltip-format": "Search apps (Alt+Enter)",
+        "on-click": "pkill -x fuzzel || fuzzel"
+    },
+
+    "hyprland/workspaces": {
+        "format": "",
+        "persistent-workspaces": { "*": 4 },
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"r-1\" })'",
+        "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"r+1\" })'"
+    },
+
+    "wlr/taskbar": {
+        "format": "{icon}",
+        "icon-size": 22,
+        "tooltip-format": "{title}",
+        "on-click": "activate",
+        "on-click-middle": "close"
+    },
+
+    "clock": {
+        "format": "{:%a %e %b   %I:%M %p}",
+        "tooltip-format": "<tt>{calendar}</tt>",
+        "calendar": { "mode": "month", "format": { "today": "<b><u>{}</u></b>" } }
+    },
+
+    "tray": { "icon-size": 18, "spacing": 10 },
+
+    "custom/theme": {
+        "format": "",
+        "tooltip-format": "Appearance (Super+I) · right-click: light/dark",
+        "on-click": "~/.local/bin/m3-settings appearance",
+        "on-click-right": "~/.local/bin/m3-theme toggle"
+    },
+
+    "network": {
+        "format-wifi": "",
+        "format-ethernet": "",
+        "format-linked": "",
+        "format-disconnected": "",
+        "tooltip-format-wifi": "{essid} · {signalStrength}%",
+        "tooltip-format-ethernet": "{ifname} · {ipaddr}",
+        "tooltip-format-disconnected": "Offline",
+        "on-click": "~/.local/bin/m3-settings network"
+    },
+
+    "pulseaudio": {
+        "format": "{icon}",
+        "format-muted": "",
+        "format-icons": { "default": ["", "", ""] },
+        "tooltip-format": "{desc} · {volume}%",
+        "scroll-step": 5,
+        "on-click": "~/.local/bin/m3-settings sound",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    },
+
+    "battery": {
+        "format": "<span font_family='Material Symbols Rounded' size='13pt' rise='-2pt'>{icon}</span> {capacity}%",
+        "format-charging": "<span font_family='Material Symbols Rounded' size='13pt' rise='-2pt'></span> {capacity}%",
+        "format-icons": ["", "", "", "", "", "", "", ""],
+        "states": { "warning": 20, "critical": 10 }
+    },
+
+    "custom/notifications": {
+        "exec": "swaync-client -swb",
+        "return-type": "json",
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "", "none": "",
+            "dnd-notification": "", "dnd-none": "",
+            "inhibited-notification": "", "inhibited-none": "",
+            "dnd-inhibited-notification": "", "dnd-inhibited-none": ""
+        },
+        "tooltip": false,
+        "on-click": "swaync-client -t -sw",
+        "on-click-right": "swaync-client -d -sw"
+    },
+
+    "custom/power": {
+        "format": "",
+        "tooltip-format": "Power (Ctrl+Alt+Del)",
+        "on-click": "~/.local/bin/m3-power"
+    }
+}

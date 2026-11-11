@@ -1,0 +1,19 @@
+#cloud-config
+users:
+  - name: user
+    gecos: M3 User
+    groups: [video, input, render, audio, sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBMHKUpjP3fmo0tEU7xbmfDYOdLFs9xNCdZOXX7yI2ci m3-vm
+write_files:
+  - path: /etc/systemd/system/getty@tty1.service.d/autologin.conf
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --autologin user --noclear %I $TERM
+runcmd:
+  - systemctl daemon-reload
+  - systemctl restart getty@tty1

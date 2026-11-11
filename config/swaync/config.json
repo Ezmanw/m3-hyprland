@@ -1,0 +1,92 @@
+{
+    "$schema": "/etc/xdg/swaync/configSchema.json",
+    "positionX": "right",
+    "positionY": "top",
+    "layer": "overlay",
+    "control-center-layer": "overlay",
+    "control-center-margin-top": 8,
+    "control-center-margin-right": 8,
+    "control-center-margin-bottom": 8,
+    "control-center-width": 400,
+    "notification-window-width": 400,
+    "notification-icon-size": 44,
+    "fit-to-screen": true,
+    "timeout": 6,
+    "timeout-low": 4,
+    "timeout-critical": 0,
+    "transition-time": 200,
+    "hide-on-clear": true,
+    "widgets": [
+        "title",
+        "buttons-grid",
+        "volume",
+        "dnd",
+        "mpris",
+        "notifications"
+    ],
+    "widget-config": {
+        "title": {
+            "text": "Quick settings",
+            "clear-all-button": true,
+            "button-text": "Clear all"
+        },
+        "dnd": {
+            "text": "Do not disturb"
+        },
+        "mpris": {
+            "image-size": 72,
+            "image-radius": 16
+        },
+        "volume": {
+            "label": "Volume"
+        },
+        "buttons-grid": {
+            "actions": [
+                {
+                    "label": "",
+                    "type": "toggle",
+                    "active": false,
+                    "command": "sh -c '$HOME/.local/bin/m3-toggle wifi'",
+                    "update-command": "sh -c '$HOME/.local/bin/m3-toggle wifi status'"
+                },
+                {
+                    "label": "",
+                    "type": "toggle",
+                    "active": false,
+                    "command": "sh -c '$HOME/.local/bin/m3-toggle bluetooth'",
+                    "update-command": "sh -c '$HOME/.local/bin/m3-toggle bluetooth status'"
+                },
+                {
+                    "label": "",
+                    "type": "toggle",
+                    "active": false,
+                    "command": "sh -c '$HOME/.local/bin/m3-toggle dark'",
+                    "update-command": "sh -c '$HOME/.local/bin/m3-toggle dark status'"
+                },
+                {
+                    "label": "",
+                    "type": "toggle",
+                    "active": false,
+                    "command": "sh -c '$HOME/.local/bin/m3-toggle night'",
+                    "update-command": "sh -c '$HOME/.local/bin/m3-toggle night status'"
+                },
+                {
+                    "label": "",
+                    "command": "sh -c 'swaync-client -cp; sleep 0.4; $HOME/.local/bin/m3-screenshot region'"
+                },
+                {
+                    "label": "",
+                    "command": "sh -c 'swaync-client -cp; $HOME/.local/bin/m3-settings'"
+                },
+                {
+                    "label": "",
+                    "command": "sh -c 'swaync-client -cp; hyprlock'"
+                },
+                {
+                    "label": "",
+                    "command": "sh -c 'swaync-client -cp; $HOME/.local/bin/m3-power'"
+                }
+            ]
+        }
+    }
+}

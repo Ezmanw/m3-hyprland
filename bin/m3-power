@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# m3-power - power menu (Ctrl+Alt+Del or the bar's power button)
+choice=$(printf '%s\n' "Lock" "Sleep" "Log out" "Restart" "Shut down" \
+    | fuzzel --dmenu --placeholder "Power" --lines 5 --width 24) || exit 0
+case "$choice" in
+    Lock)        hyprlock ;;
+    Sleep)       systemctl suspend ;;
+    "Log out")   hyprctl dispatch 'hl.dsp.exit()' ;;
+    Restart)     systemctl reboot ;;
+    "Shut down") systemctl poweroff ;;
+esac

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# m3-toggle - quick-settings switches used by the notification panel.
+#   m3-toggle wifi|bluetooth|dark|night          flip it
+#   m3-toggle wifi|bluetooth|dark|night status   print true or false
+export PATH="$HOME/.local/bin:$PATH"
+what="${1:-}"; arg="${2:-}"
+
+state() {
+    case "$what" in
+        wifi)      [ "$(nmcli radio wifi 2>/dev/null)" = enabled ] ;;
+        bluetooth) bluetoothctl show 2>/dev/null | grep -q 'Powered: yes' ;;
+        dark)      [ "$(m3-theme get mode)" != light ] ;;
+        night)     [ "$(m3-settings --night-light status)" = true ] ;;
+        *)         echo "usage: m3-toggle wifi|bluetooth|dark|night [status]" >&2; exit 2 ;;
+    esac
+}
+
+if [ "$arg" = status ]; then
+    state && echo true || echo false
+    exit 0
+fi
+
+# the panel tells us the wanted state; from a terminal just flip it
+want="${SWAYNC_TOGGLE_STATE:-}"
+if [ -z "$want" ]; then state && want=false || want=true; fi
+
+case "$what" in
+    wifi)      [ "$want" = true ] && nmcli radio wifi on || nmcli radio wifi off ;;
+    bluetooth) [ "$want" = true ] && bluetoothctl power on || bluetoothctl power off ;;
+    dark)      [ "$want" = true ] && m3-theme dark || m3-theme light ;;
+    night)     [ "$want" = true ] && m3-settings --night-light on || m3-settings --night-light off ;;
+    *)         state ;;
+esac >/dev/null 2>&1

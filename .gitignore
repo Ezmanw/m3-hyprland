@@ -1,0 +1,19 @@
+# VM disk images and guest credentials (NEVER commit these)
+vm/*.qcow2
+vm/*.iso
+vm/qemu.log
+vm/vm_key
+vm/vm_key.pub
+
+# Python cache and byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.tmp
+
+# Editor & OS temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

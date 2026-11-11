@@ -1,0 +1,116 @@
+/* Material 3 bar. Colour roles come from colors.css (written by m3-theme). */
+@import "colors.css";
+
+* {
+    font-family: "Google Sans Flex", "Roboto", sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    min-height: 0;
+    border: none;
+    box-shadow: none;
+    text-shadow: none;
+}
+
+window#waybar {
+    background: @surface;
+    color: @on_surface;
+}
+
+/* ---- Search pill (M3 search bar) ---- */
+#custom-launcher {
+    background: @surface_container_high;
+    color: @on_surface_variant;
+    border-radius: 999px;
+    margin: 6px 4px 6px 8px;
+    padding: 0 20px 0 14px;
+    transition: background 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+#custom-launcher:hover { background: @surface_container_highest; }
+
+/* ---- Workspaces: M3 page indicator ---- */
+#workspaces {
+    background: @surface_container;
+    border-radius: 999px;
+    margin: 6px 4px;
+    padding: 0 10px;
+}
+#workspaces button {
+    min-width: 8px;
+    min-height: 8px;
+    font-size: 0;
+    padding: 0;
+    margin: 14px 4px;
+    border-radius: 999px;
+    background: @on_surface_variant;
+    transition: all 300ms cubic-bezier(0.2, 0, 0, 1);
+}
+#workspaces button label { font-size: 0; min-height: 0; min-width: 0; padding: 0; margin: 0; }
+#workspaces button:hover { background: @on_surface; }
+#workspaces button.empty { background: @outline_variant; }
+#workspaces button.active { min-width: 28px; background: @primary; }
+#workspaces button.urgent { background: @error; }
+
+/* ---- Taskbar ---- */
+#taskbar { margin: 6px 4px; }
+#taskbar button {
+    padding: 0 9px;
+    margin: 0 2px;
+    border-radius: 999px;
+    background: transparent;
+    transition: background 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+#taskbar button:hover { background: @surface_container_high; }
+#taskbar button.active { background: @secondary_container; }
+
+/* ---- Clock ---- */
+#clock {
+    color: @on_surface;
+    padding: 0 16px;
+    font-weight: 600;
+}
+
+/* ---- Status area: one tonal pill made of several modules ---- */
+#tray, #custom-theme, #network, #pulseaudio, #battery, #custom-notifications {
+    background: @surface_container;
+    color: @on_surface_variant;
+    margin: 6px 0;
+    padding: 0 9px;
+}
+#custom-theme, #network, #pulseaudio, #custom-notifications, #custom-power {
+    font-family: "Material Symbols Rounded";
+    font-size: 20px;
+    font-weight: 400;
+}
+#tray { border-radius: 999px; margin-right: 8px; padding: 0 14px; }
+#custom-theme { border-radius: 999px 0 0 999px; padding-left: 14px; }
+#custom-notifications { border-radius: 0 999px 999px 0; padding-right: 14px; }
+#custom-theme:hover, #network:hover, #pulseaudio:hover, #custom-notifications:hover { color: @primary; }
+#battery.warning { color: @tertiary; }
+#battery.critical { color: @error; }
+#pulseaudio.muted, #network.disconnected { color: @outline; }
+
+/* ---- Power: filled tonal icon button ---- */
+#custom-power {
+    background: @primary_container;
+    color: @on_primary_container;
+    border-radius: 999px;
+    margin: 6px 8px 6px 8px;
+    padding: 0 9px;
+}
+#custom-power:hover { background: @primary; color: @on_primary; }
+
+/* ---- Tooltips & menus ---- */
+tooltip {
+    background: @inverse_surface;
+    border-radius: 8px;
+    padding: 2px 4px;
+}
+tooltip label { color: @inverse_on_surface; font-size: 12px; }
+menu {
+    background: @surface_container;
+    color: @on_surface;
+    border-radius: 12px;
+    padding: 6px;
+}
+menu menuitem { border-radius: 8px; padding: 6px 12px; }
+menu menuitem:hover { background: @surface_container_highest; }

@@ -1,0 +1,55 @@
+# matugen turns one seed colour (or a wallpaper) into the full Material 3
+# palette and fills in every template below. Run it through: m3-theme
+[config]
+
+[templates.hyprland]
+input_path = '~/.config/matugen/templates/colors.lua'
+output_path = '~/.config/hypr/colors.lua'
+
+[templates.hyprlock]
+input_path = '~/.config/matugen/templates/hyprlock-colors.conf'
+output_path = '~/.config/hypr/hyprlock-colors.conf'
+
+[templates.waybar]
+input_path = '~/.config/matugen/templates/colors.css'
+output_path = '~/.config/waybar/colors.css'
+
+[templates.swaync]
+input_path = '~/.config/matugen/templates/colors.css'
+output_path = '~/.config/swaync/colors.css'
+
+[templates.fuzzel]
+input_path = '~/.config/matugen/templates/fuzzel.ini'
+output_path = '~/.config/fuzzel/fuzzel.ini'
+
+[templates.foot]
+input_path = '~/.config/matugen/templates/foot.ini'
+output_path = '~/.config/foot/foot.ini'
+
+[templates.gtk3]
+input_path = '~/.config/matugen/templates/gtk.css'
+output_path = '~/.config/gtk-3.0/m3-colors.css'
+
+[templates.gtk4]
+input_path = '~/.config/matugen/templates/gtk.css'
+output_path = '~/.config/gtk-4.0/m3-colors.css'
+
+[templates.wallpaper]
+input_path = '~/.config/matugen/templates/wallpaper.svg'
+output_path = '~/.local/state/m3/wallpaper.svg'
+
+[templates.swayosd]
+input_path = '~/.config/matugen/templates/swayosd.css'
+output_path = '~/.config/swayosd/style.css'
+
+[templates.qt5ct]
+input_path = '~/.config/matugen/templates/qtct.conf'
+output_path = '~/.config/qt5ct/colors/m3.conf'
+
+[templates.qt6ct]
+input_path = '~/.config/matugen/templates/qtct.conf'
+output_path = '~/.config/qt6ct/colors/m3.conf'
+
+[templates.sddm]
+input_path = '~/.config/matugen/templates/sddm-theme.conf'
+output_path = '~/.local/state/m3/sddm-theme.conf'

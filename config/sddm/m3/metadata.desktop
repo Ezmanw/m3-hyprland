@@ -1,0 +1,10 @@
+[SddmGreeterTheme]
+Name=Material 3
+Description=Material 3 login screen for the M3 Hyprland desktop
+Type=sddm-theme
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=m3
+Theme-API=2.0
+QtVersion=6
