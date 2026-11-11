@@ -15,7 +15,10 @@ end
 ------------------
 ---- MONITORS ----
 ------------------
-hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })
+-- Load user-configured monitors from Settings (Super+I)
+pcall(dofile, home .. "/.config/hypr/settings.lua")
+-- Fallback for unconfigured monitors
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 
 ---------------------
 ---- ENVIRONMENT ----
@@ -38,7 +41,11 @@ if nv then
     hl.env("LIBVA_DRIVER_NAME", "nvidia")
     hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
     hl.env("NVD_BACKEND", "direct")
-    hl.config({ cursor = { no_hardware_cursors = true } })
+    hl.config({
+        cursor = { no_hardware_cursors = false },
+        opengl = { nvidia_anti_flicker = true },
+        misc   = { vrr = 0 },
+    })
 end
 
 -------------------
@@ -94,7 +101,7 @@ hl.config({
         force_default_wallpaper = 0,
         disable_hyprland_logo   = true,
         background_color        = c.surface,
-        focus_on_activate       = true,
+        focus_on_activate       = false, -- Keep focus on active window; prevent background apps shifting view
     },
 
     input = {
@@ -206,6 +213,34 @@ hl.window_rule({
 hl.window_rule({
     name  = "fix-xwayland-drags",
     match = { class = "^$", title = "^$", xwayland = true, float = true, fullscreen = false, pin = false },
+    no_focus = true,
+})
+
+hl.window_rule({
+    name  = "float-transient-event-windows",
+    match = { title = ".*(event window|reg\\.exe|winedevice|xalia).*" },
+    float = true,
+    no_focus = true,
+})
+
+hl.window_rule({
+    name  = "float-wine-exe-titles",
+    match = { title = ".*[a-zA-Z]:\\\\.*" },
+    float = true,
+    no_focus = true,
+})
+
+hl.window_rule({
+    name  = "float-wine-exe-classes",
+    match = { class = ".*\\.exe$" },
+    float = true,
+    no_focus = true,
+})
+
+hl.window_rule({
+    name  = "float-empty-xwayland",
+    match = { xwayland = true, title = "^$" },
+    float = true,
     no_focus = true,
 })
 
