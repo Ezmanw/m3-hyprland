@@ -63,6 +63,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("sh -c 'for p in /usr/libexec/hyprpolkitagent /usr/lib/hyprpolkitagent/hyprpolkitagent /usr/lib/hyprpolkitagent; do [ -x \"$p\" ] && [ ! -d \"$p\" ] && exec \"$p\"; done'")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
+    hl.exec_cmd(bin .. "m3-minimize daemon")
 end)
 
 -----------------------
@@ -164,15 +165,23 @@ hl.bind("ALT + SHIFT + Tab", function()
     hl.dispatch(hl.dsp.window.bring_to_top())
 end)
 
--- Snap: Super+Up maximises, Super+Down restores, Super+Left/Right moves the window
+-- Snap: Super+Up maximises, Super+Down restores/minimizes, Super+Left/Right moves the window
 hl.bind("SUPER + up", function()
     local w = hl.get_active_window()
     if w and w.fullscreen == 0 then hl.dispatch(hl.dsp.window.fullscreen({ mode = "maximized" })) end
 end)
 hl.bind("SUPER + down", function()
     local w = hl.get_active_window()
-    if w and w.fullscreen ~= 0 then hl.dispatch(hl.dsp.window.fullscreen({ mode = "maximized" })) end
+    if w and w.fullscreen ~= 0 then
+        hl.dispatch(hl.dsp.window.fullscreen({ mode = "maximized" }))
+    else
+        hl.exec_cmd(bin .. "m3-minimize window")
+    end
 end)
+hl.bind("SUPER + M",         exec(bin .. "m3-minimize window"))
+hl.bind("SUPER + SHIFT + M", exec(bin .. "m3-minimize restore"))
+hl.bind("SUPER + D",         exec(bin .. "m3-minimize toggle-desktop"))
+hl.bind("SUPER + BackSpace", exec(bin .. "m3-minimize menu"))
 hl.bind("SUPER + left",           hl.dsp.window.move({ direction = "left" }))
 hl.bind("SUPER + right",          hl.dsp.window.move({ direction = "right" }))
 hl.bind("SUPER + SHIFT + left",   hl.dsp.window.move({ monitor = "l" }))

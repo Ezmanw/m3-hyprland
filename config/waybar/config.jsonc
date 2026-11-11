@@ -4,7 +4,7 @@
     "position": "top",
     "height": 48,
     "spacing": 0,
-    "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar"],
+    "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar", "custom/minimized"],
     "modules-center": ["clock"],
     "modules-right": ["tray", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
 
@@ -25,8 +25,19 @@
         "format": "{icon}",
         "icon-size": 22,
         "tooltip-format": "{title}",
-        "on-click": "activate",
+        "on-click": "minimize-raise",
         "on-click-middle": "close"
+    },
+
+    "custom/minimized": {
+        "format": "{}",
+        "return-type": "json",
+        "exec": "~/.local/bin/m3-minimize status",
+        "signal": 8,
+        "interval": 2,
+        "on-click": "~/.local/bin/m3-minimize restore",
+        "on-click-right": "~/.local/bin/m3-minimize menu",
+        "on-click-middle": "~/.local/bin/m3-minimize restore-all"
     },
 
     "clock": {

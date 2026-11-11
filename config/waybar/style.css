@@ -62,6 +62,22 @@ window#waybar {
 #taskbar button:hover { background: @surface_container_high; }
 #taskbar button.active { background: @secondary_container; }
 
+/* ---- Minimized indicator ---- */
+#custom-minimized {
+    background: @surface_container_high;
+    color: @primary;
+    border-radius: 999px;
+    margin: 6px 4px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+#custom-minimized:hover {
+    background: @secondary_container;
+    color: @on_secondary_container;
+}
+
 /* ---- Clock ---- */
 #clock {
     color: @on_surface;

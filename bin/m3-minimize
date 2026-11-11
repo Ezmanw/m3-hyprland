@@ -1,0 +1,403 @@
+#!/usr/bin/env python3
+"""
+m3-minimize - Material 3 window minimize & restore manager for Hyprland.
+
+Hyprland natively uses the special workspace 'special:minimized' as a scratchpad.
+This utility provides full Windows-style minimization workflows:
+  - m3-minimize window [address]     Minimize active window (or specified address)
+  - m3-minimize restore [address]    Restore last minimized window (or specified address)
+  - m3-minimize restore-all          Restore all minimized windows
+  - m3-minimize toggle-desktop       Show/hide desktop toggle (Win+D)
+  - m3-minimize menu                 Fuzzel popup picker for minimized windows
+  - m3-minimize status               Waybar JSON status
+  - m3-minimize daemon               Background IPC listener for auto-restoring
+"""
+
+import sys
+import os
+import fcntl
+import json
+import socket
+import subprocess
+import time
+from pathlib import Path
+
+CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+STATE_FILE = CACHE_DIR / "m3-minimized.json"
+DESKTOP_FILE = CACHE_DIR / "m3-desktop.json"
+LOCK_FILE = CACHE_DIR / "m3-minimize-daemon.lock"
+
+
+def load_state():
+    try:
+        if STATE_FILE.exists():
+            with open(STATE_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {"history": [], "windows": {}}
+
+
+def save_state(state):
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f)
+    except Exception:
+        pass
+
+
+def signal_waybar():
+    try:
+        subprocess.run(["pkill", "-RTMIN+8", "waybar"], capture_output=True)
+    except Exception:
+        pass
+
+
+def get_hyprctl_json(cmd):
+    try:
+        res = subprocess.run(["hyprctl", cmd, "-j"], capture_output=True, text=True, check=True)
+        return json.loads(res.stdout)
+    except Exception:
+        return None
+
+
+def hypr_eval(lua_code):
+    try:
+        res = subprocess.run(["hyprctl", "eval", lua_code], capture_output=True, text=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+
+def get_active_window():
+    return get_hyprctl_json("activewindow")
+
+
+def get_all_clients():
+    return get_hyprctl_json("clients") or []
+
+
+def get_minimized_clients():
+    clients = get_all_clients()
+    return [c for c in clients if c.get("workspace", {}).get("name") == "special:minimized"]
+
+
+def minimize_window(addr=None):
+    if not addr:
+        act = get_active_window()
+        if not act or not act.get("address"):
+            return
+        addr = act["address"]
+        orig_ws = act.get("workspace", {}).get("id", 1)
+        title = act.get("title", "")
+    else:
+        # find client info
+        clients = get_all_clients()
+        orig_ws = 1
+        title = ""
+        for c in clients:
+            if c.get("address") == addr:
+                orig_ws = c.get("workspace", {}).get("id", 1)
+                title = c.get("title", "")
+                break
+
+    # Dispatch move to special:minimized
+    lua = f"hl.dispatch(hl.dsp.window.move({{ workspace = 'special:minimized', follow = false, window = 'address:{addr}' }}))"
+    hypr_eval(lua)
+
+    # Update state
+    state = load_state()
+    history = [a for a in state.get("history", []) if a != addr]
+    history.append(addr)
+    windows = state.get("windows", {})
+    windows[addr] = {
+        "orig_ws": orig_ws,
+        "title": title,
+        "time": time.time(),
+    }
+    state["history"] = history
+    state["windows"] = windows
+    save_state(state)
+    signal_waybar()
+
+
+def restore_window(addr=None):
+    minimized = get_minimized_clients()
+    if not minimized:
+        return
+
+    state = load_state()
+    history = state.get("history", [])
+    windows = state.get("windows", {})
+
+    target_addr = addr
+    if not target_addr:
+        # pick from history first, backwards
+        for a in reversed(history):
+            if any(c.get("address") == a for c in minimized):
+                target_addr = a
+                break
+        if not target_addr:
+            target_addr = minimized[-1].get("address")
+
+    if not target_addr:
+        return
+
+    # Move to current workspace (+0) and follow/focus
+    lua = f"hl.dispatch(hl.dsp.window.move({{ workspace = '+0', follow = true, window = 'address:{target_addr}' }}))"
+    hypr_eval(lua)
+
+    # Clean up state
+    history = [a for a in history if a != target_addr]
+    windows.pop(target_addr, None)
+    state["history"] = history
+    state["windows"] = windows
+    save_state(state)
+    signal_waybar()
+
+
+def restore_all():
+    minimized = get_minimized_clients()
+    for c in minimized:
+        addr = c.get("address")
+        if addr:
+            lua = f"hl.dispatch(hl.dsp.window.move({{ workspace = '+0', follow = true, window = 'address:{addr}' }}))"
+            hypr_eval(lua)
+    save_state({"history": [], "windows": {}})
+    signal_waybar()
+
+
+def toggle_desktop():
+    active_ws = get_hyprctl_json("activeworkspace")
+    if not active_ws:
+        return
+    ws_id = active_ws.get("id")
+
+    # Check if desktop state file has saved windows for this workspace
+    desktop_state = {}
+    try:
+        if DESKTOP_FILE.exists():
+            with open(DESKTOP_FILE, "r") as f:
+                desktop_state = json.load(f)
+    except Exception:
+        pass
+
+    saved_for_ws = desktop_state.get(str(ws_id), [])
+    minimized = {c.get("address") for c in get_minimized_clients()}
+
+    # If all saved windows are still minimized, restore them!
+    if saved_for_ws and any(a in minimized for a in saved_for_ws):
+        for addr in saved_for_ws:
+            if addr in minimized:
+                hypr_eval(f"hl.dispatch(hl.dsp.window.move({{ workspace = '+0', follow = true, window = 'address:{addr}' }}))")
+        desktop_state[str(ws_id)] = []
+        try:
+            with open(DESKTOP_FILE, "w") as f:
+                json.dump(desktop_state, f)
+        except Exception:
+            pass
+        signal_waybar()
+        return
+
+    # Otherwise, minimize all visible windows on this workspace
+    clients = get_all_clients()
+    ws_windows = [
+        c for c in clients
+        if c.get("workspace", {}).get("id") == ws_id and not c.get("floating", False)
+    ]
+    # Also include visible floating windows
+    ws_windows += [
+        c for c in clients
+        if c.get("workspace", {}).get("id") == ws_id and c.get("floating", False) and not c.get("hidden", False)
+    ]
+
+    addrs_to_hide = [c["address"] for c in ws_windows if "address" in c]
+    if not addrs_to_hide:
+        return
+
+    for addr in addrs_to_hide:
+        minimize_window(addr)
+
+    desktop_state[str(ws_id)] = addrs_to_hide
+    try:
+        with open(DESKTOP_FILE, "w") as f:
+            json.dump(desktop_state, f)
+    except Exception:
+        pass
+    signal_waybar()
+
+
+def show_menu():
+    minimized = get_minimized_clients()
+    if not minimized:
+        subprocess.run(["notify-send", "-a", "Hyprland", "-i", "dialog-information", "Minimized Windows", "No minimized windows."])
+        return
+
+    if len(minimized) == 1:
+        restore_window(minimized[0].get("address"))
+        return
+
+    lines = []
+    addr_map = {}
+    for c in minimized:
+        title = c.get("title", "Window")
+        app_cls = c.get("class", c.get("initialClass", "App"))
+        entry = f"{app_cls} — {title}"
+        lines.append(entry)
+        addr_map[entry] = c.get("address")
+
+    input_text = "\n".join(lines)
+    proc = subprocess.run(
+        ["fuzzel", "--dmenu", "--placeholder", "Restore window..."],
+        input=input_text,
+        text=True,
+        capture_output=True,
+    )
+    selected = proc.stdout.strip()
+    if selected and selected in addr_map:
+        restore_window(addr_map[selected])
+
+
+def output_status():
+    minimized = get_minimized_clients()
+    count = len(minimized)
+    if count == 0:
+        print(json.dumps({"text": "", "alt": "empty", "tooltip": ""}))
+        return
+
+    titles = [c.get("title", "Window") for c in minimized[:5]]
+    more = f"\n...and {count - 5} more" if count > 5 else ""
+    tooltip = (
+        f"{count} minimized window{'s' if count != 1 else ''}:\n"
+        + "\n".join(f"• {t}" for t in titles)
+        + more
+        + "\n\nLeft-click: Restore last\nRight-click: Select window\nMiddle-click: Restore all"
+    )
+
+    # Unicode \ue86f is Material Symbols 'minimize'
+    data = {
+        "text": f"\ue86f  {count}",
+        "tooltip": tooltip,
+        "class": "has-minimized",
+    }
+    print(json.dumps(data))
+
+
+def run_daemon():
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, BlockingIOError):
+        # Another daemon is already running
+        sys.exit(0)
+    # Find hyprland instance socket2
+    xdg_runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    instance_sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    sock_path = None
+
+    if instance_sig:
+        cand = Path(xdg_runtime) / "hypr" / instance_sig / ".socket2.sock"
+        if cand.exists():
+            sock_path = cand
+
+    if not sock_path:
+        hypr_dir = Path(xdg_runtime) / "hypr"
+        if hypr_dir.exists():
+            for p in hypr_dir.glob("*/.socket2.sock"):
+                sock_path = p
+                break
+
+    if not sock_path or not sock_path.exists():
+        sys.stderr.write("m3-minimize daemon: could not find .socket2.sock\n")
+        sys.exit(1)
+
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(str(sock_path))
+    except Exception as e:
+        sys.stderr.write(f"m3-minimize daemon: connect error: {e}\n")
+        sys.exit(1)
+
+    buffer = ""
+    while True:
+        try:
+            data = s.recv(4096).decode("utf-8", errors="ignore")
+            if not data:
+                break
+            buffer += data
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.strip()
+                if not line:
+                    continue
+
+                # 1. When a window becomes active, check if it was on special:minimized
+                if line.startswith("activewindowv2>>"):
+                    raw_addr = line.split(">>")[1]
+                    addr = "0x" + raw_addr
+                    # Check clients
+                    clients = get_all_clients()
+                    for c in clients:
+                        if c.get("address") == addr and c.get("workspace", {}).get("name") == "special:minimized":
+                            # Auto-restore to current workspace
+                            hypr_eval(f"hl.dispatch(hl.dsp.window.move({{ workspace = '+0', follow = true, window = 'address:{addr}' }}))")
+                            # Update state & waybar
+                            state = load_state()
+                            state["history"] = [a for a in state.get("history", []) if a != addr]
+                            state.get("windows", {}).pop(addr, None)
+                            save_state(state)
+                            signal_waybar()
+                            break
+
+                # 2. Window closed
+                elif line.startswith("closewindow>>"):
+                    raw_addr = line.split(">>")[1]
+                    addr = "0x" + raw_addr
+                    state = load_state()
+                    if addr in state.get("windows", {}):
+                        state["history"] = [a for a in state.get("history", []) if a != addr]
+                        state.get("windows", {}).pop(addr, None)
+                        save_state(state)
+                        signal_waybar()
+
+                # 3. Minimized event from foreign-toplevel
+                elif line.startswith("minimized>>"):
+                    parts = line.split(">>")[1].split(",")
+                    if len(parts) >= 2:
+                        raw_addr, is_min = parts[0], parts[1]
+                        addr = "0x" + raw_addr
+                        if is_min == "1":
+                            minimize_window(addr)
+                        else:
+                            restore_window(addr)
+
+        except Exception as e:
+            time.sleep(1)
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "menu"
+    arg = sys.argv[2] if len(sys.argv) > 2 else None
+
+    if cmd in ("window", "minimize"):
+        minimize_window(arg)
+    elif cmd in ("restore", "unminimize"):
+        restore_window(arg)
+    elif cmd == "restore-all":
+        restore_all()
+    elif cmd in ("toggle-desktop", "desktop"):
+        toggle_desktop()
+    elif cmd == "menu":
+        show_menu()
+    elif cmd == "status":
+        output_status()
+    elif cmd == "daemon":
+        run_daemon()
+    else:
+        print("Usage: m3-minimize [window|restore|restore-all|toggle-desktop|menu|status|daemon]")
+
+
+if __name__ == "__main__":
+    main()
