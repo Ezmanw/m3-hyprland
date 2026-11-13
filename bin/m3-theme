@@ -68,6 +68,18 @@ set_gtk() {
     gsettings set $s icon-theme "$(icon_theme)"
     gsettings set $s cursor-theme Bibata-Modern-Classic
     gsettings set $s font-name 'Google Sans Flex 11'
+    gsettings set org.gnome.desktop.wm.preferences button-layout 'icon:maximize,close'
+    local ini
+    for ini in "$CFG/gtk-3.0/settings.ini" "$CFG/gtk-4.0/settings.ini"; do
+        mkdir -p "$(dirname "$ini")"
+        if [ -f "$ini" ] && grep -q '^gtk-decoration-layout=' "$ini"; then
+            sed -i 's/^gtk-decoration-layout=.*/gtk-decoration-layout=icon:maximize,close/' "$ini"
+        elif [ -f "$ini" ] && grep -q '^\[Settings\]' "$ini"; then
+            sed -i '/^\[Settings\]/a gtk-decoration-layout=icon:maximize,close' "$ini"
+        else
+            printf '[Settings]\ngtk-decoration-layout=icon:maximize,close\n' >> "$ini"
+        fi
+    done
 } 2>/dev/null
 
 set_qt() { # Qt apps: Fusion style + the generated palette, through qt5ct / qt6ct
