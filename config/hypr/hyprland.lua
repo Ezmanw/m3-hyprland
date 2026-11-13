@@ -153,7 +153,8 @@ hl.bind("CTRL + ALT + Delete",    exec(bin .. "m3-power"))
 
 -- Screenshots (COSMIC-style drag and done)
 hl.bind("SUPER + SHIFT + S",      exec(bin .. "m3-screenshot region"))
-hl.bind("Print",                  exec(bin .. "m3-screenshot full"))
+hl.bind("Print",                  exec(bin .. "m3-screenshot region"))
+hl.bind("SUPER + Print",          exec(bin .. "m3-screenshot full"))
 
 -- Alt+Tab
 hl.bind("ALT + Tab", function()

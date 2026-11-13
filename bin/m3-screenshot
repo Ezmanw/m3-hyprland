@@ -85,11 +85,28 @@ def get_active_monitor_geom():
     return None
 
 
+def get_slurp_cmd(extra=()):
+    """COSMIC-style slurp: dimmed screen, clear selection rectangle, crisp M3 border."""
+    border = "#d0bcffff"
+    try:
+        colors_lua = os.path.join(HOME, ".config", "hypr", "colors.lua")
+        if os.path.exists(colors_lua):
+            with open(colors_lua) as f:
+                txt = f.read()
+            import re
+            m = re.search(r'primary\s*=\s*"rgb\(([0-9a-fA-F]{6})\)"', txt)
+            if m:
+                border = f"#{m.group(1)}ff"
+    except Exception:
+        pass
+    return ["slurp", "-d", "-b", "#00000088", "-c", border, "-s", "#00000000", "-w", "2", *extra]
+
+
 def capture_mode(mode):
     """Run grim/slurp for the given mode ('region', 'window', 'full'). Returns file path or None."""
     out = next_filename()
     if mode == "region":
-        p = subprocess.run(["slurp"], capture_output=True, text=True)
+        p = subprocess.run(get_slurp_cmd(), capture_output=True, text=True)
         if p.returncode != 0 or not p.stdout.strip():
             return None
         area = p.stdout.strip()
@@ -97,9 +114,9 @@ def capture_mode(mode):
     elif mode == "window":
         rects = get_window_rects_for_slurp()
         if rects:
-            p = subprocess.run(["slurp", "-r"], input=rects, capture_output=True, text=True)
+            p = subprocess.run(get_slurp_cmd(["-r"]), input=rects, capture_output=True, text=True)
         else:
-            p = subprocess.run(["slurp"], capture_output=True, text=True)
+            p = subprocess.run(get_slurp_cmd(), capture_output=True, text=True)
         if p.returncode != 0 or not p.stdout.strip():
             return None
         area = p.stdout.strip()
