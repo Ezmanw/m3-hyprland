@@ -32,7 +32,9 @@ DEFAULTS = {
     "rounding": 20, "gaps": 8, "border": 2, "animations": True,
     "bar_12h": True, "bar_show_date": True, "bar_show_seconds": False,
     "bar_launcher_icon": "", "bar_launcher_text": True,
-    "bar_show_taskbar": True, "bar_show_tray": True, "bar_show_battery": True,
+    "bar_show_taskbar": True, "bar_show_minimize": False, "bar_show_minimized": True,
+    "bar_show_screenshot": False, "bar_show_tray": True, "bar_show_network": True,
+    "bar_show_audio": True, "bar_show_battery": True, "bar_show_notifications": True,
     "bar_show_theme": False,
 }
 
@@ -175,19 +177,28 @@ def apply_waybar(s):
     left = ["custom/launcher", "hyprland/workspaces"]
     if s.get("bar_show_taskbar", True):
         left.append("wlr/taskbar")
-    left += ["custom/minimize-btn", "custom/minimized"]
+    if s.get("bar_show_minimize", False):
+        left.append("custom/minimize-btn")
+    if s.get("bar_show_minimized", True):
+        left.append("custom/minimized")
     data["modules-left"] = left
 
     right = []
     if s.get("bar_show_tray", True):
         right.append("tray")
-    right.append("custom/screenshot")
+    if s.get("bar_show_screenshot", False):
+        right.append("custom/screenshot")
     if s.get("bar_show_theme", False):
         right.append("custom/theme")
-    right += ["network", "pulseaudio"]
+    if s.get("bar_show_network", True):
+        right.append("network")
+    if s.get("bar_show_audio", True):
+        right.append("pulseaudio")
     if s.get("bar_show_battery", True):
         right.append("battery")
-    right += ["custom/notifications", "custom/power"]
+    if s.get("bar_show_notifications", True):
+        right.append("custom/notifications")
+    right.append("custom/power")
     data["modules-right"] = right
 
     if "wlr/taskbar" in data and "icon-theme" in data["wlr/taskbar"]:
@@ -851,18 +862,36 @@ class Settings(Adw.Application):
                         subtitle="Show text alongside the launcher icon")
 
         # Modules
-        r_theme = switch("Appearance button", self.s.get("bar_show_theme", False),
-                         lambda on: update_bar_setting("bar_show_theme", on),
-                         subtitle="Show theme customize icon on top bar")
         r_taskbar = switch("Window taskbar", self.s.get("bar_show_taskbar", True),
                            lambda on: update_bar_setting("bar_show_taskbar", on),
                            subtitle="Show open windows in the top bar")
+        r_min_btn = switch("Minimize button", self.s.get("bar_show_minimize", False),
+                           lambda on: update_bar_setting("bar_show_minimize", on),
+                           subtitle="Show clickable minimize button next to taskbar")
+        r_min_pill = switch("Minimized windows pill", self.s.get("bar_show_minimized", True),
+                            lambda on: update_bar_setting("bar_show_minimized", on),
+                            subtitle="Show pill when windows are minimized")
+        r_shot = switch("Screenshot button", self.s.get("bar_show_screenshot", False),
+                        lambda on: update_bar_setting("bar_show_screenshot", on),
+                        subtitle="Show screenshot icon in the top bar")
         r_tray = switch("System tray", self.s.get("bar_show_tray", True),
                         lambda on: update_bar_setting("bar_show_tray", on),
                         subtitle="Show background status and notification icons")
+        r_net = switch("Network icon", self.s.get("bar_show_network", True),
+                       lambda on: update_bar_setting("bar_show_network", on),
+                       subtitle="Show Wi-Fi / Ethernet indicator")
+        r_aud = switch("Volume icon", self.s.get("bar_show_audio", True),
+                       lambda on: update_bar_setting("bar_show_audio", on),
+                       subtitle="Show speaker volume indicator")
         r_batt = switch("Battery status", self.s.get("bar_show_battery", True),
                         lambda on: update_bar_setting("bar_show_battery", on),
                         subtitle="Show battery percentage and charging indicator")
+        r_notif = switch("Notifications button", self.s.get("bar_show_notifications", True),
+                         lambda on: update_bar_setting("bar_show_notifications", on),
+                         subtitle="Show notification center toggle")
+        r_theme = switch("Appearance button", self.s.get("bar_show_theme", False),
+                         lambda on: update_bar_setting("bar_show_theme", on),
+                         subtitle="Show theme customize icon on top bar")
 
         # Actions
         reload_row = Adw.ActionRow(title="Reload top bar", subtitle="Refresh Waybar styling and layout",
@@ -874,7 +903,7 @@ class Settings(Adw.Application):
         return self.page(
             self.group("Clock", rows=[r_12h, r_date, r_sec]),
             self.group("Launcher", rows=[r_icon, r_text]),
-            self.group("Modules", rows=[r_taskbar, r_tray, r_batt, r_theme]),
+            self.group("Modules", rows=[r_taskbar, r_min_btn, r_min_pill, r_shot, r_tray, r_net, r_aud, r_batt, r_notif, r_theme]),
             self.group(rows=[reload_row])
         )
 

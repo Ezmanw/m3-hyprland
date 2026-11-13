@@ -4,9 +4,9 @@
     "position": "top",
     "height": 48,
     "spacing": 0,
-    "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar", "custom/minimize-btn", "custom/minimized"],
+    "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar", "custom/minimized"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "custom/screenshot", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
+    "modules-right": ["tray", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
 
     "custom/launcher": {
         "format": "<span font_family='Material Symbols Rounded' size='13pt' rise='-2pt'></span>  Search",
@@ -25,7 +25,7 @@
         "format": "{icon}",
         "icon-size": 22,
         "tooltip-format": "{title}",
-        "on-click": "minimize-raise",
+        "on-click": "activate",
         "on-click-middle": "close"
     },
 
@@ -49,9 +49,9 @@
 
     "custom/screenshot": {
         "format": "",
-        "tooltip-format": "Snipping Tool (Print)\nRight-click: Region snip (Super+Shift+S)",
-        "on-click": "~/.local/bin/m3-screenshot ui",
-        "on-click-right": "~/.local/bin/m3-screenshot region"
+        "tooltip-format": "Region screenshot (Super+Shift+S)\nRight-click: Snipping Tool",
+        "on-click": "~/.local/bin/m3-screenshot region",
+        "on-click-right": "~/.local/bin/m3-screenshot ui"
     },
 
     "clock": {

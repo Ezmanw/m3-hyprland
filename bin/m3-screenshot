@@ -570,22 +570,22 @@ def run_gui(initial_mode="ui", open_file=None, no_preview=False):
 
 def main():
     args = sys.argv[1:]
-    no_preview = "--no-preview" in args
-    args = [a for a in args if a != "--no-preview"]
+    with_preview = "--preview" in args
+    args = [a for a in args if a not in ("--preview", "--no-preview")]
 
     if len(args) >= 2 and args[0] == "--open":
         run_gui(open_file=args[1])
         return
 
-    mode = args[0] if args else "ui"
-    if no_preview and mode in ("region", "window", "full"):
+    mode = args[0] if args else "region"
+    if mode in ("region", "window", "full") and not with_preview:
         capture_mode(mode)
         return
 
     if mode in ("ui", "region", "window", "full"):
-        run_gui(initial_mode=mode, no_preview=no_preview)
+        run_gui(initial_mode=mode, no_preview=not with_preview)
     else:
-        print("Usage: m3-screenshot [ui|region|window|full] [--no-preview]")
+        print("Usage: m3-screenshot [region|window|full|ui] [--preview]")
         sys.exit(2)
 
 

@@ -151,10 +151,9 @@ hl.bind("SUPER + N",              exec("swaync-client -t -sw"))
 hl.bind("SUPER + V",              exec("cliphist list | fuzzel --dmenu --placeholder 'Clipboard' | cliphist decode | wl-copy"))
 hl.bind("CTRL + ALT + Delete",    exec(bin .. "m3-power"))
 
--- Screenshots (Windows Snipping Tool style)
+-- Screenshots (COSMIC-style drag and done)
 hl.bind("SUPER + SHIFT + S",      exec(bin .. "m3-screenshot region"))
-hl.bind("Print",                  exec(bin .. "m3-screenshot ui"))
-hl.bind("SUPER + Print",          exec(bin .. "m3-screenshot full"))
+hl.bind("Print",                  exec(bin .. "m3-screenshot full"))
 
 -- Alt+Tab
 hl.bind("ALT + Tab", function()
@@ -259,16 +258,6 @@ hl.window_rule({
     match = { class = "^(emote|com\\.tomjwatson\\.Emote|org\\.pulseaudio\\.pavucontrol|pavucontrol|zenity|xdg-desktop-portal-gtk|io\\.github\\.m3hyprland\\.Snip)$" },
     float = true,
 })
-
--- Route native/protocol minimize requests to m3-minimize
-hl.on("window.minimize", function(w, min)
-    if not w then return end
-    if min then
-        hl.exec_cmd(bin .. "m3-minimize window " .. w.address)
-    else
-        hl.exec_cmd(bin .. "m3-minimize restore " .. w.address)
-    end
-end)
 
 -- M3 scrim behind the search bar
 hl.layer_rule({ name = "launcher-scrim", match = { namespace = "^launcher$" }, dim_around = true })
