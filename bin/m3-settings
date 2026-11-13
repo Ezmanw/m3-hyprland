@@ -175,11 +175,13 @@ def apply_waybar(s):
     left = ["custom/launcher", "hyprland/workspaces"]
     if s.get("bar_show_taskbar", True):
         left.append("wlr/taskbar")
+    left += ["custom/minimize-btn", "custom/minimized"]
     data["modules-left"] = left
 
     right = []
     if s.get("bar_show_tray", True):
         right.append("tray")
+    right.append("custom/screenshot")
     if s.get("bar_show_theme", False):
         right.append("custom/theme")
     right += ["network", "pulseaudio"]

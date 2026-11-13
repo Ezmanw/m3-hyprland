@@ -177,12 +177,13 @@ for p in hypr waybar swaync swayosd matugen fuzzel/fuzzel.ini foot/foot.ini gtk-
 done
 
 KEEP_USER_LUA=0; [ -f "$CFG/hypr/user.lua" ] && KEEP_USER_LUA=1
-mkdir -p "$CFG"/{hypr,waybar,swaync,matugen,gtk-3.0,gtk-4.0} "$DATA/applications"
+mkdir -p "$CFG"/{hypr,waybar,swaync,matugen,gtk-3.0,gtk-4.0,xdg-desktop-portal} "$DATA/applications"
 [ "$KEEP_USER_LUA" = 1 ] && cp -a "$CFG/hypr/user.lua" "$TMP/user.lua"
 cp -a "$HERE/config/hypr/."    "$CFG/hypr/"
 cp -a "$HERE/config/waybar/."  "$CFG/waybar/"
 cp -a "$HERE/config/swaync/."  "$CFG/swaync/"
 cp -a "$HERE/config/matugen/." "$CFG/matugen/"
+cp -a "$HERE/config/xdg-desktop-portal/." "$CFG/xdg-desktop-portal/"
 cp -a "$HERE/config/gtk/gtk.css" "$CFG/gtk-3.0/gtk.css"
 cp -a "$HERE/config/gtk/gtk.css" "$CFG/gtk-4.0/gtk.css"
 install -m755 "$HERE"/bin/* "$BIN/"
@@ -231,6 +232,18 @@ Exec=$BIN/m3-settings
 Icon=preferences-system
 Categories=Settings;
 StartupWMClass=io.github.m3hyprland.Settings
+EOF
+cat > "$DATA/applications/m3-screenshot.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Snipping Tool
+GenericName=Screenshot
+Comment=Capture and annotate screenshots (Print / Super+Shift+S)
+Exec=$BIN/m3-screenshot ui
+Icon=applets-screenshooter
+Categories=Utility;Graphics;
+Keywords=screenshot;snip;capture;screen;
+StartupWMClass=io.github.m3hyprland.Snip
 EOF
 # an old-style hyprland.conf would be ignored once hyprland.lua exists; it stays in the backup
 [ -d "$BACKUP" ] && echo "previous config saved in $BACKUP"

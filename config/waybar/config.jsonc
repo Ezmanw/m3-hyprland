@@ -4,9 +4,9 @@
     "position": "top",
     "height": 48,
     "spacing": 0,
-    "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar", "custom/minimized"],
+    "modules-left": ["custom/launcher", "hyprland/workspaces", "wlr/taskbar", "custom/minimize-btn", "custom/minimized"],
     "modules-center": ["clock"],
-    "modules-right": ["tray", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
+    "modules-right": ["tray", "custom/screenshot", "network", "pulseaudio", "battery", "custom/notifications", "custom/power"],
 
     "custom/launcher": {
         "format": "<span font_family='Material Symbols Rounded' size='13pt' rise='-2pt'></span>  Search",
@@ -29,6 +29,13 @@
         "on-click-middle": "close"
     },
 
+    "custom/minimize-btn": {
+        "format": "",
+        "tooltip-format": "Minimize active window (Super+M)\nRight-click: Show Desktop (Super+D)",
+        "on-click": "~/.local/bin/m3-minimize window",
+        "on-click-right": "~/.local/bin/m3-minimize toggle-desktop"
+    },
+
     "custom/minimized": {
         "format": "{}",
         "return-type": "json",
@@ -38,6 +45,13 @@
         "on-click": "~/.local/bin/m3-minimize restore",
         "on-click-right": "~/.local/bin/m3-minimize menu",
         "on-click-middle": "~/.local/bin/m3-minimize restore-all"
+    },
+
+    "custom/screenshot": {
+        "format": "",
+        "tooltip-format": "Snipping Tool (Print)\nRight-click: Region snip (Super+Shift+S)",
+        "on-click": "~/.local/bin/m3-screenshot ui",
+        "on-click-right": "~/.local/bin/m3-screenshot region"
     },
 
     "clock": {

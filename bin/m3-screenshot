@@ -1,10 +1,593 @@
-#!/usr/bin/env bash
-# m3-screenshot region|full - saves to ~/Pictures/Screenshots and copies to the clipboard
-dir="$HOME/Pictures/Screenshots"; mkdir -p "$dir"
-file="$dir/Screenshot $(date '+%Y-%m-%d %H-%M-%S').png"
-case "${1:-full}" in
-    region) area=$(slurp) || exit 0; grim -g "$area" "$file" ;;
-    *)      grim "$file" ;;
-esac || exit 1
-wl-copy --type image/png < "$file"
-notify-send -i "$file" "Screenshot saved" "Copied to clipboard"
+#!/usr/bin/env python3
+"""m3-screenshot - Material 3 Snipping Tool for Hyprland.
+
+Modes:
+  m3-screenshot [ui]        Open the floating Snipping Tool toolbar
+  m3-screenshot region      Snip a selected region (Super+Shift+S)
+  m3-screenshot window      Click a window to snip it
+  m3-screenshot full        Capture the active monitor (Super+Print)
+  m3-screenshot --open FILE Open an existing image in the Snip Preview
+"""
+
+import json
+import math
+import os
+import subprocess
+import sys
+import threading
+import time
+from datetime import datetime
+
+HOME = os.path.expanduser("~")
+SHOT_DIR = os.path.join(HOME, "Pictures", "Screenshots")
+APP_ID = "io.github.m3hyprland.Snip"
+
+
+def ensure_dir():
+    os.makedirs(SHOT_DIR, exist_ok=True)
+
+
+def next_filename():
+    ensure_dir()
+    return os.path.join(SHOT_DIR, datetime.now().strftime("Screenshot %Y-%m-%d %H-%M-%S.png"))
+
+
+def copy_file_to_clipboard(path):
+    try:
+        with open(path, "rb") as f:
+            subprocess.run(["wl-copy", "--type", "image/png"], stdin=f, check=True)
+        return True
+    except Exception:
+        return False
+
+
+def notify(path, msg="Copied to clipboard"):
+    try:
+        subprocess.Popen(["notify-send", "-a", "Snipping Tool", "-i", path, "Screenshot saved", msg])
+    except Exception:
+        pass
+
+
+def get_window_rects_for_slurp():
+    """Return newline-separated 'x,y wxh title' rects for visible windows on active workspaces."""
+    try:
+        mons = json.loads(subprocess.check_output(["hyprctl", "monitors", "-j"], text=True))
+        active_ws = {m.get("activeWorkspace", {}).get("id") for m in mons}
+        clients = json.loads(subprocess.check_output(["hyprctl", "clients", "-j"], text=True))
+        lines = []
+        for c in clients:
+            if not c.get("mapped") or c.get("hidden"):
+                continue
+            ws_id = c.get("workspace", {}).get("id")
+            if ws_id not in active_ws:
+                continue
+            x, y = c.get("at", [0, 0])
+            w, h = c.get("size", [0, 0])
+            if w > 0 and h > 0:
+                title = (c.get("title") or c.get("class") or "Window").replace("\n", " ")
+                lines.append(f"{x},{y} {w}x{h} {title}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def get_active_monitor_geom():
+    try:
+        mons = json.loads(subprocess.check_output(["hyprctl", "monitors", "-j"], text=True))
+        for m in mons:
+            if m.get("focused"):
+                scale = float(m.get("scale", 1.0) or 1.0)
+                w = int(round(m["width"] / scale))
+                h = int(round(m["height"] / scale))
+                return f"{m['x']},{m['y']} {w}x{h}"
+    except Exception:
+        pass
+    return None
+
+
+def capture_mode(mode):
+    """Run grim/slurp for the given mode ('region', 'window', 'full'). Returns file path or None."""
+    out = next_filename()
+    if mode == "region":
+        p = subprocess.run(["slurp"], capture_output=True, text=True)
+        if p.returncode != 0 or not p.stdout.strip():
+            return None
+        area = p.stdout.strip()
+        subprocess.run(["grim", "-g", area, out], check=True)
+    elif mode == "window":
+        rects = get_window_rects_for_slurp()
+        if rects:
+            p = subprocess.run(["slurp", "-r"], input=rects, capture_output=True, text=True)
+        else:
+            p = subprocess.run(["slurp"], capture_output=True, text=True)
+        if p.returncode != 0 or not p.stdout.strip():
+            return None
+        area = p.stdout.strip()
+        subprocess.run(["grim", "-g", area, out], check=True)
+    else:  # full
+        geom = get_active_monitor_geom()
+        cmd = ["grim", "-g", geom, out] if geom else ["grim", out]
+        subprocess.run(cmd, check=True)
+
+    copy_file_to_clipboard(out)
+    notify(out)
+    return out
+
+
+# ------------------------------------------------------------------ GTK4 UI --
+def run_gui(initial_mode="ui", open_file=None, no_preview=False):
+    import gi
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, Graphene, Gtk
+
+    CSS = """
+    .snip-bar {
+        padding: 10px 14px;
+    }
+    .snip-mode-btn {
+        border-radius: 14px;
+        padding: 10px 16px;
+        font-weight: 600;
+    }
+    .snip-color-btn {
+        min-width: 24px;
+        min-height: 24px;
+        padding: 0;
+        border-radius: 999px;
+        border: 2px solid alpha(currentColor, 0.25);
+    }
+    .snip-color-btn.selected {
+        border: 2px solid @accent_color;
+    }
+    .snip-canvas-frame {
+        border-radius: 12px;
+        background: alpha(#000000, 0.25);
+    }
+    """
+
+    class SnipApp(Adw.Application):
+        def __init__(self):
+            super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
+            self.toolbar_win = None
+            self.preview_win = None
+
+        def do_activate(self):
+            prov = Gtk.CssProvider()
+            prov.load_from_data(CSS.encode())
+            Gtk.StyleContext.add_provider_for_display(
+                Gdk.Display.get_default(), prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+            if open_file and os.path.exists(open_file):
+                self.show_preview(open_file)
+            elif initial_mode in ("region", "window", "full"):
+                self.do_capture(initial_mode, delay=0)
+            else:
+                self.show_toolbar()
+
+        def show_toolbar(self):
+            if self.toolbar_win is not None:
+                self.toolbar_win.present()
+                return
+
+            win = Adw.Window(application=self, title="Snipping Tool", resizable=False)
+            win.set_default_size(-1, -1)
+            self.toolbar_win = win
+
+            outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            win.set_content(outer)
+
+            hbar = Adw.HeaderBar()
+            hbar.set_show_end_title_buttons(True)
+            hbar.set_title_widget(Adw.WindowTitle(title="Snipping Tool", subtitle=""))
+            outer.append(hbar)
+
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            box.add_css_class("snip-bar")
+            outer.append(box)
+
+            delay_dd = Gtk.DropDown.new_from_strings(["No delay", "3s delay", "5s delay"])
+            delay_dd.set_valign(Gtk.Align.CENTER)
+            delay_dd.set_tooltip_text("Capture delay")
+
+            def get_delay():
+                return [0, 3, 5][delay_dd.get_selected()]
+
+            for mode, icon, label, tip in [
+                ("region", "edit-select-all-symbolic", "Rectangle", "Drag to select an area (Super+Shift+S)"),
+                ("window", "window-new-symbolic", "Window", "Click a window to capture"),
+                ("full", "view-fullscreen-symbolic", "Fullscreen", "Capture the entire screen (Super+Print)"),
+            ]:
+                btn = Gtk.Button()
+                btn.add_css_class("snip-mode-btn")
+                if mode == "region":
+                    btn.add_css_class("suggested-action")
+                inner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                inner.append(Gtk.Image.new_from_icon_name(icon))
+                inner.append(Gtk.Label(label=label))
+                btn.set_child(inner)
+                btn.set_tooltip_text(tip)
+                btn.connect("clicked", lambda _b, m=mode: self._trigger_from_toolbar(m, get_delay()))
+                box.append(btn)
+
+            sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+            box.append(sep)
+            box.append(delay_dd)
+
+            win.connect("close-request", lambda _w: self._on_toolbar_close())
+            win.present()
+
+        def _on_toolbar_close(self):
+            self.toolbar_win = None
+            return False
+
+        def _trigger_from_toolbar(self, mode, delay):
+            if self.toolbar_win:
+                self.toolbar_win.set_visible(False)
+            self.do_capture(mode, delay=delay)
+
+        def do_capture(self, mode, delay=0):
+            # Hold app alive during capture thread
+            self.hold()
+
+            def worker():
+                time.sleep(0.25 + float(delay))
+                path = None
+                try:
+                    path = capture_mode(mode)
+                except Exception:
+                    path = None
+                GLib.idle_add(self._after_capture, path)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        def _after_capture(self, path):
+            if self.toolbar_win:
+                self.toolbar_win.close()
+                self.toolbar_win = None
+            if path and os.path.exists(path) and not no_preview:
+                self.show_preview(path)
+            self.release()
+            return False
+
+        def show_preview(self, path):
+            if self.preview_win:
+                self.preview_win.close()
+
+            orig_pb = GdkPixbuf.Pixbuf.new_from_file(path)
+            if not orig_pb.get_has_alpha():
+                orig_pb = orig_pb.add_alpha(False, 0, 0, 0)
+            img_w = orig_pb.get_width()
+            img_h = orig_pb.get_height()
+
+            win = Adw.Window(application=self, title=os.path.basename(path))
+            win.set_default_size(min(960, max(540, img_w // 2 + 40)), min(700, max(400, img_h // 2 + 120)))
+            self.preview_win = win
+
+            root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            win.set_content(root)
+
+            # Header bar with tools + actions
+            hbar = Adw.HeaderBar()
+            root.append(hbar)
+
+            new_btn = Gtk.Button(label="New")
+            new_btn.set_icon_name("list-add-symbolic")
+            new_btn.set_tooltip_text("Take a new snip")
+            new_btn.connect("clicked", lambda _b: (win.close(), self.show_toolbar()))
+            hbar.pack_start(new_btn)
+
+            # Drawing state
+            state = {
+                "tool": "pen",       # pen | highlight
+                "color": (229, 57, 53, 255),
+                "radius": 3,
+                "strokes": [],       # list of (tool, rgba, radius, [(x, y), ...])
+                "current": None,
+                "pb": orig_pb.copy(),
+                "dirty": False,
+            }
+
+            pen_btn = Gtk.ToggleButton(icon_name="document-edit-symbolic", active=True)
+            pen_btn.set_tooltip_text("Pen")
+            hi_btn = Gtk.ToggleButton(icon_name="format-text-highlight-symbolic", group=pen_btn)
+            hi_btn.set_tooltip_text("Highlighter")
+
+            def on_tool_toggle(_b):
+                if hi_btn.get_active():
+                    state["tool"] = "highlight"
+                    state["radius"] = 14
+                else:
+                    state["tool"] = "pen"
+                    state["radius"] = 3
+
+            pen_btn.connect("toggled", on_tool_toggle)
+            hi_btn.connect("toggled", on_tool_toggle)
+
+            tool_box = Gtk.Box(spacing=4)
+            tool_box.add_css_class("linked")
+            tool_box.append(pen_btn)
+            tool_box.append(hi_btn)
+            hbar.pack_start(tool_box)
+
+            # Color buttons
+            COLORS = [
+                ("Red", (229, 57, 53), "#e53935"),
+                ("Yellow", (253, 216, 53), "#fdd835"),
+                ("Blue", (30, 136, 229), "#1e88e5"),
+                ("Green", (67, 160, 71), "#43a047"),
+                ("White", (255, 255, 255), "#ffffff"),
+                ("Black", (20, 20, 20), "#141414"),
+            ]
+            color_btns = []
+            cbox = Gtk.Box(spacing=4)
+            cbox.set_margin_start(6)
+            for idx, (cname, rgb, hex_c) in enumerate(COLORS):
+                cb = Gtk.Button()
+                cb.add_css_class("snip-color-btn")
+                if idx == 0:
+                    cb.add_css_class("selected")
+                cb.set_tooltip_text(cname)
+                swatch = Gtk.Box()
+                swatch.set_size_request(18, 18)
+                sp = Gtk.CssProvider()
+                sp.load_from_data(f"box {{ background: {hex_c}; border-radius: 999px; }}".encode())
+                swatch.get_style_context().add_provider(sp, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                cb.set_child(swatch)
+
+                def on_color(_b, c_rgb=rgb, target=cb):
+                    state["color"] = (*c_rgb, 255)
+                    for other in color_btns:
+                        other.remove_css_class("selected")
+                    target.add_css_class("selected")
+
+                cb.connect("clicked", on_color)
+                color_btns.append(cb)
+                cbox.append(cb)
+            hbar.pack_start(cbox)
+
+            undo_btn = Gtk.Button(icon_name="edit-undo-symbolic")
+            undo_btn.set_tooltip_text("Undo last stroke")
+            hbar.pack_start(undo_btn)
+
+            # Right actions: Open folder, Copy, Save As
+            toast_overlay = Adw.ToastOverlay()
+            root.append(toast_overlay)
+
+            def draw_stroke_into_buf(buf, rs, nc, tool, rgba, rad, pts):
+                if not pts:
+                    return
+                r_col, g_col, b_col, _ = rgba
+                alpha = 0.38 if tool == "highlight" else 1.0
+                for i in range(len(pts)):
+                    x0, y0 = pts[i]
+                    x1, y1 = pts[i + 1] if i + 1 < len(pts) else (x0, y0)
+                    dist = math.hypot(x1 - x0, y1 - y0)
+                    steps = max(1, int(dist / max(1.0, rad * 0.4)))
+                    for s in range(steps + 1):
+                        t = s / steps
+                        cx = int(round(x0 + (x1 - x0) * t))
+                        cy = int(round(y0 + (y1 - y0) * t))
+                        y_min = max(0, cy - rad)
+                        y_max = min(img_h - 1, cy + rad)
+                        x_min = max(0, cx - rad)
+                        x_max = min(img_w - 1, cx + rad)
+                        r2 = rad * rad
+                        for py in range(y_min, y_max + 1):
+                            dy2 = (py - cy) * (py - cy)
+                            row_off = py * rs
+                            for px in range(x_min, x_max + 1):
+                                if (px - cx) * (px - cx) + dy2 <= r2:
+                                    off = row_off + px * nc
+                                    if alpha >= 0.99:
+                                        buf[off] = r_col
+                                        buf[off + 1] = g_col
+                                        buf[off + 2] = b_col
+                                        buf[off + 3] = 255
+                                    else:
+                                        inv = 1.0 - alpha
+                                        buf[off] = int(buf[off] * inv + r_col * alpha)
+                                        buf[off + 1] = int(buf[off + 1] * inv + g_col * alpha)
+                                        buf[off + 2] = int(buf[off + 2] * inv + b_col * alpha)
+                                        buf[off + 3] = 255
+
+            def render_to_pixbuf(extra_stroke=None):
+                pb = orig_pb.copy()
+                strokes = list(state["strokes"])
+                if extra_stroke:
+                    strokes.append(extra_stroke)
+                if not strokes:
+                    return pb
+                buf = bytearray(pb.get_pixels())
+                rs = pb.get_rowstride()
+                nc = pb.get_n_channels()
+                for tool, rgba, rad, pts in strokes:
+                    draw_stroke_into_buf(buf, rs, nc, tool, rgba, rad, pts)
+                return GdkPixbuf.Pixbuf.new_from_bytes(
+                    GLib.Bytes.new(bytes(buf)),
+                    GdkPixbuf.Colorspace.RGB,
+                    True,
+                    8,
+                    img_w,
+                    img_h,
+                    rs,
+                )
+
+            def save_current(dest_path):
+                if state["dirty"]:
+                    state["pb"] = render_to_pixbuf()
+                    state["dirty"] = False
+                state["pb"].savev(dest_path, "png", [], [])
+
+            def on_copy(_b):
+                save_current(path)
+                if copy_file_to_clipboard(path):
+                    toast_overlay.add_toast(Adw.Toast(title="Copied to clipboard", timeout=2))
+
+            def on_save_as(_b):
+                dlg = Gtk.FileDialog(title="Save Screenshot")
+                dlg.set_initial_name(os.path.basename(path))
+                dlg.set_initial_folder(Gio.File.new_for_path(SHOT_DIR))
+
+                def done(d, res):
+                    try:
+                        f = d.save_finish(res)
+                        if f:
+                            save_current(f.get_path())
+                            toast_overlay.add_toast(Adw.Toast(title="Saved", timeout=2))
+                    except Exception:
+                        pass
+
+                dlg.save(win, None, done)
+
+            copy_btn = Gtk.Button(label="Copy")
+            copy_btn.add_css_class("suggested-action")
+            copy_btn.set_tooltip_text("Copy screenshot to clipboard")
+            copy_btn.connect("clicked", on_copy)
+            hbar.pack_end(copy_btn)
+
+            save_btn = Gtk.Button(icon_name="document-save-symbolic")
+            save_btn.set_tooltip_text("Save As...")
+            save_btn.connect("clicked", on_save_as)
+            hbar.pack_end(save_btn)
+
+            folder_btn = Gtk.Button(icon_name="folder-open-symbolic")
+            folder_btn.set_tooltip_text("Open Screenshots folder")
+            folder_btn.connect("clicked", lambda _b: subprocess.Popen(["xdg-open", SHOT_DIR]))
+            hbar.pack_end(folder_btn)
+
+            # Canvas area (pure GTK4 Snapshot + Gdk.Texture, zero pycairo dependency)
+            scrolled = Gtk.ScrolledWindow()
+            scrolled.set_vexpand(True)
+            scrolled.set_hexpand(True)
+            toast_overlay.set_child(scrolled)
+
+            def get_fit_rect(aw, ah):
+                scale = min(aw / img_w, ah / img_h, 1.0)
+                dw = img_w * scale
+                dh = img_h * scale
+                ox = (aw - dw) / 2.0
+                oy = (ah - dh) / 2.0
+                return ox, oy, dw, dh, scale
+
+            class SnipCanvas(Gtk.Widget):
+                def do_snapshot(self, snapshot):
+                    aw = self.get_width()
+                    ah = self.get_height()
+                    if aw <= 0 or ah <= 0:
+                        return
+                    ox, oy, dw, dh, scale = get_fit_rect(aw, ah)
+                    if state["dirty"]:
+                        state["pb"] = render_to_pixbuf()
+                        state["dirty"] = False
+                    tex = Gdk.Texture.new_for_pixbuf(state["pb"])
+                    rect = Graphene.Rect().init(ox, oy, dw, dh)
+                    snapshot.append_texture(tex, rect)
+
+                    cur = state["current"]
+                    if cur and cur[3]:
+                        tool, rgba, rad, pts = cur
+                        r_c, g_c, b_c, _ = rgba
+                        a_c = 0.38 if tool == "highlight" else 1.0
+                        col = Gdk.RGBA()
+                        col.red = r_c / 255.0
+                        col.green = g_c / 255.0
+                        col.blue = b_c / 255.0
+                        col.alpha = a_c
+                        dot_r = max(2.0, rad * scale)
+                        for i in range(len(pts)):
+                            x0, y0 = pts[i]
+                            x1, y1 = pts[i + 1] if i + 1 < len(pts) else (x0, y0)
+                            dist = math.hypot(x1 - x0, y1 - y0)
+                            steps = max(1, int(dist / max(1.0, rad * 0.5)))
+                            for s in range(steps + 1):
+                                t = s / steps
+                                px = ox + (x0 + (x1 - x0) * t) * scale - dot_r
+                                py = oy + (y0 + (y1 - y0) * t) * scale - dot_r
+                                snapshot.append_color(col, Graphene.Rect().init(px, py, dot_r * 2, dot_r * 2))
+
+            area = SnipCanvas()
+            area.add_css_class("snip-canvas-frame")
+            area.set_hexpand(True)
+            area.set_vexpand(True)
+            scrolled.set_child(area)
+
+            drag = Gtk.GestureDrag()
+            area.add_controller(drag)
+
+            def to_img_coords(x, y):
+                aw = area.get_width()
+                ah = area.get_height()
+                ox, oy, _dw, _dh, scale = get_fit_rect(aw, ah)
+                ix = max(0.0, min(img_w - 1.0, (x - ox) / scale))
+                iy = max(0.0, min(img_h - 1.0, (y - oy) / scale))
+                return ix, iy
+
+            def on_drag_begin(_g, sx, sy):
+                ix, iy = to_img_coords(sx, sy)
+                state["current"] = (state["tool"], state["color"], state["radius"], [(ix, iy)])
+                area.queue_draw()
+
+            def on_drag_update(_g, dx, dy):
+                if not state["current"]:
+                    return
+                ok, sx, sy = drag.get_start_point()
+                if not ok:
+                    return
+                ix, iy = to_img_coords(sx + dx, sy + dy)
+                state["current"][3].append((ix, iy))
+                area.queue_draw()
+
+            def on_drag_end(_g, _dx, _dy):
+                if state["current"]:
+                    state["strokes"].append(state["current"])
+                    state["current"] = None
+                    state["dirty"] = True
+                    area.queue_draw()
+                    save_current(path)
+                    copy_file_to_clipboard(path)
+
+            drag.connect("drag-begin", on_drag_begin)
+            drag.connect("drag-update", on_drag_update)
+            drag.connect("drag-end", on_drag_end)
+
+            def on_undo(_b):
+                if state["strokes"]:
+                    state["strokes"].pop()
+                    state["dirty"] = True
+                    area.queue_draw()
+                    save_current(path)
+                    copy_file_to_clipboard(path)
+
+            undo_btn.connect("clicked", on_undo)
+
+            toast_overlay.add_toast(Adw.Toast(title="Saved & copied to clipboard", timeout=2))
+            win.present()
+
+    app = SnipApp()
+    app.run([])
+
+
+def main():
+    args = sys.argv[1:]
+    no_preview = "--no-preview" in args
+    args = [a for a in args if a != "--no-preview"]
+
+    if len(args) >= 2 and args[0] == "--open":
+        run_gui(open_file=args[1])
+        return
+
+    mode = args[0] if args else "ui"
+    if no_preview and mode in ("region", "window", "full"):
+        capture_mode(mode)
+        return
+
+    if mode in ("ui", "region", "window", "full"):
+        run_gui(initial_mode=mode, no_preview=no_preview)
+    else:
+        print("Usage: m3-screenshot [ui|region|window|full] [--no-preview]")
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

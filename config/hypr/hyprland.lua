@@ -27,7 +27,7 @@ hl.env("PATH", home .. "/.local/bin:" .. (os.getenv("PATH") or "/usr/bin:/bin"))
 hl.env("XCURSOR_THEME", "Bibata-Modern-Classic")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
-hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
+hl.env("XDG_CURRENT_DESKTOP", "Hyprland:GNOME")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 hl.env("QT_QPA_PLATFORMTHEME", "qt5ct") -- qt5ct and qt6ct both answer to this
@@ -52,7 +52,7 @@ end
 ---- AUTOSTART ----
 -------------------
 hl.on("hyprland.start", function()
-    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE")
+    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE SSH_AUTH_SOCK")
     hl.exec_cmd("gnome-keyring-daemon --start --components=secrets,pkcs11,ssh")
     hl.exec_cmd(bin .. "m3-theme restore")
     hl.exec_cmd("waybar")
@@ -151,9 +151,10 @@ hl.bind("SUPER + N",              exec("swaync-client -t -sw"))
 hl.bind("SUPER + V",              exec("cliphist list | fuzzel --dmenu --placeholder 'Clipboard' | cliphist decode | wl-copy"))
 hl.bind("CTRL + ALT + Delete",    exec(bin .. "m3-power"))
 
--- Screenshots
+-- Screenshots (Windows Snipping Tool style)
 hl.bind("SUPER + SHIFT + S",      exec(bin .. "m3-screenshot region"))
-hl.bind("Print",                  exec(bin .. "m3-screenshot full"))
+hl.bind("Print",                  exec(bin .. "m3-screenshot ui"))
+hl.bind("SUPER + Print",          exec(bin .. "m3-screenshot full"))
 
 -- Alt+Tab
 hl.bind("ALT + Tab", function()
@@ -255,9 +256,19 @@ hl.window_rule({
 
 hl.window_rule({
     name  = "float-small-tools",
-    match = { class = "^(emote|com\\.tomjwatson\\.Emote|org\\.pulseaudio\\.pavucontrol|pavucontrol|zenity|xdg-desktop-portal-gtk)$" },
+    match = { class = "^(emote|com\\.tomjwatson\\.Emote|org\\.pulseaudio\\.pavucontrol|pavucontrol|zenity|xdg-desktop-portal-gtk|io\\.github\\.m3hyprland\\.Snip)$" },
     float = true,
 })
+
+-- Route native/protocol minimize requests to m3-minimize
+hl.on("window.minimize", function(w, min)
+    if not w then return end
+    if min then
+        hl.exec_cmd(bin .. "m3-minimize window " .. w.address)
+    else
+        hl.exec_cmd(bin .. "m3-minimize restore " .. w.address)
+    end
+end)
 
 -- M3 scrim behind the search bar
 hl.layer_rule({ name = "launcher-scrim", match = { namespace = "^launcher$" }, dim_around = true })

@@ -62,7 +62,21 @@ window#waybar {
 #taskbar button:hover { background: @surface_container_high; }
 #taskbar button.active { background: @secondary_container; }
 
-/* ---- Minimized indicator ---- */
+/* ---- Minimized indicator & minimize button ---- */
+#custom-minimize-btn {
+    font-family: "Material Symbols Rounded";
+    font-size: 18px;
+    color: @on_surface_variant;
+    background: transparent;
+    border-radius: 999px;
+    margin: 6px 2px;
+    padding: 0 9px;
+    transition: background 200ms cubic-bezier(0.2, 0, 0, 1), color 200ms;
+}
+#custom-minimize-btn:hover {
+    background: @surface_container_high;
+    color: @primary;
+}
 #custom-minimized {
     background: @surface_container_high;
     color: @primary;
@@ -76,6 +90,21 @@ window#waybar {
 #custom-minimized:hover {
     background: @secondary_container;
     color: @on_secondary_container;
+}
+#custom-screenshot {
+    font-family: "Material Symbols Rounded";
+    font-size: 20px;
+    font-weight: 400;
+    background: @surface_container;
+    color: @on_surface_variant;
+    border-radius: 999px;
+    margin: 6px 8px 6px 0;
+    padding: 0 12px;
+    transition: color 200ms, background 200ms;
+}
+#custom-screenshot:hover {
+    color: @primary;
+    background: @surface_container_high;
 }
 
 /* ---- Clock ---- */
