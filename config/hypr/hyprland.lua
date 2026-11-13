@@ -105,6 +105,11 @@ hl.config({
         focus_on_activate       = false, -- Keep focus on active window; prevent background apps shifting view
     },
 
+    render = {
+        send_content_type = false, -- avoid monitor re-sync/blanking when apps set content type
+        cm_auto_hdr       = 0,     -- avoid automatic HDR modeset/reload on new windows
+    },
+
     input = {
         kb_layout    = "us",
         follow_mouse = 1,
