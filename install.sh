@@ -187,6 +187,10 @@ cp -a "$HERE/config/xdg-desktop-portal/." "$CFG/xdg-desktop-portal/"
 cp -a "$HERE/config/gtk/gtk.css" "$CFG/gtk-3.0/gtk.css"
 cp -a "$HERE/config/gtk/gtk.css" "$CFG/gtk-4.0/gtk.css"
 install -m755 "$HERE"/bin/* "$BIN/"
+if command -v g++ >/dev/null 2>&1 && [ -f "$HERE/src/m3-minimize-plugin.cpp" ]; then
+    mkdir -p "$HOME/.local/lib"
+    g++ -shared -fPIC -O2 -std=c++23 "$HERE/src/m3-minimize-plugin.cpp" -o "$HOME/.local/lib/m3-minimize-plugin.so" || true
+fi
 
 [ "$KEEP_USER_LUA" = 1 ] && cp -a "$TMP/user.lua" "$CFG/hypr/user.lua"   # never overwrite personal tweaks
 

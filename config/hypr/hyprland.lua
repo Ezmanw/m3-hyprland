@@ -64,6 +64,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
     hl.exec_cmd(bin .. "m3-minimize daemon")
+    pcall(hl.plugin.load, home .. "/.local/lib/m3-minimize-plugin.so")
 end)
 
 -----------------------

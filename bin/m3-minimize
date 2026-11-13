@@ -373,6 +373,26 @@ def run_daemon():
                         else:
                             restore_window(addr)
 
+                # 4. Window moved to/from special:minimized (e.g. by m3-minimize-plugin.so)
+                elif line.startswith("movewindowv2>>"):
+                    parts = line.split(">>")[1].split(",")
+                    if len(parts) >= 3:
+                        addr = "0x" + parts[0]
+                        ws_name = parts[2]
+                        state = load_state()
+                        if ws_name == "special:minimized":
+                            history = [a for a in state.get("history", []) if a != addr]
+                            history.append(addr)
+                            state["history"] = history
+                            state.setdefault("windows", {})[addr] = {"orig_ws": 1, "title": "", "time": time.time()}
+                            save_state(state)
+                            signal_waybar()
+                        elif addr in state.get("windows", {}):
+                            state["history"] = [a for a in state.get("history", []) if a != addr]
+                            state["windows"].pop(addr, None)
+                            save_state(state)
+                            signal_waybar()
+
         except Exception as e:
             time.sleep(1)
 
